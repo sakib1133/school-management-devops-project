@@ -52,7 +52,7 @@ This project implements a full-stack monitoring solution with:
 - **Environment Variables** - Configuration management
 - **Docker Security** - Container isolation
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Docker & Docker Compose
@@ -122,7 +122,7 @@ This project implements a full-stack monitoring solution with:
 ```
 
 ### Local Development
-```bash
+bash
 # Install dependencies
 cd App && npm install
 
@@ -134,7 +134,6 @@ npm test
 
 # Build for production
 npm run build
-```
 
 ## 🔄 CI/CD Pipeline
 
