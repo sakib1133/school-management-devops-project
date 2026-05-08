@@ -2435,6 +2435,15 @@ const authorizeTeacher = (req, res, next) => {
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Health check endpoint for Render deployment
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
 // Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

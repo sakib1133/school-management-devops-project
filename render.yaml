@@ -2,6 +2,7 @@ services:
   - type: web
     name: school-portal
     runtime: node
+    plan: free
 
     buildCommand: cd App && npm install
     startCommand: cd App && npm start
@@ -17,15 +18,17 @@ services:
         value: /opt/render/project/src/App/data/school.db
 
       - key: JWT_SECRET
-        generateValue: true
+        sync: false
 
       - key: SESSION_SECRET
-        generateValue: true
+        sync: false
 
       - key: ENCRYPTION_KEY
-        generateValue: true
+        sync: false
 
     disk:
       name: data
       mountPath: /opt/render/project/src/App/data
       sizeGB: 1
+
+    healthCheckPath: /health
