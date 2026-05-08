@@ -298,7 +298,7 @@ const ANTI_PHISHING_CONFIG = {
     BLOCK_MODE: true, // true = block, false = log only
     ALLOWED_DOMAINS: process.env.ALLOWED_DOMAINS ? 
         process.env.ALLOWED_DOMAINS.split(',') : 
-        ['localhost', '127.0.0.1', 'localhost:3000', '127.0.0.1:3000', 'localhost:3443', '127.0.0.1:3443'],
+        ['localhost', '127.0.0.1', 'localhost:3000', '127.0.0.1:3000', 'localhost:3443', '127.0.0.1:3443', 'school-management-dit2.onrender.com', 'onrender.com'],
     ALLOWED_ORIGINS: process.env.CORS_ORIGINS ? 
         process.env.CORS_ORIGINS.split(',') : 
         ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://localhost:3000', 'https://127.0.0.1:3000', 'https://localhost:3443', 'https://127.0.0.1:3443'],
@@ -7875,5 +7875,15 @@ function startServers() {
         console.log('⚠️  SSL is disabled. HTTP server is running. Enable SSL for secure operation.');
     }
 }
+
+// Global error handler - must be last
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({
+        status: 'error',
+        message: 'Internal server error',
+        code: 'INTERNAL_ERROR'
+    });
+});
 
 startServers();
