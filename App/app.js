@@ -1596,16 +1596,32 @@ function logLoginAttempt(username, role, success, reason = '', clientIP = 'unkno
     console.log(`🔐 Login ${status}: ${username} (${role}) from ${clientIP} ${reason ? '- ' + reason : ''}`);
 }
 
-// Initialize SQLite database
-const db = new sqlite3.Database(process.env.DB_PATH || './school.db', (err) => {
+// Initialize SQLite database with better error handling
+const dbPath = process.env.DB_PATH || './school.db';
+console.log('Initializing database at:', dbPath);
+
+// Ensure data directory exists
+const dataDir = path.dirname(dbPath);
+if (!fs.existsSync(dataDir)) {
+    try {
+        fs.mkdirSync(dataDir, { recursive: true });
+        console.log('Created data directory:', dataDir);
+    } catch (mkdirErr) {
+        console.error('Failed to create data directory:', mkdirErr.message);
+    }
+}
+
+const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
-        console.error('Error connecting to database:', err.message);
+        console.error('❌ Error connecting to database:', err.message);
+        console.error('Database path:', dbPath);
     } else {
+        console.log('✅ Database connected successfully at:', dbPath);
+        
         // Initialize Chatbot Service after database connection
         chatbotService = new ChatbotService(db);
         // Initialize Navigation Chatbot Service (for internal chatbot)
         navigationChatbotService = new NavigationChatbotService(db);
-        console.log('Database connected');
         
         // Create tables if not exists
         db.serialize(() => {
@@ -2437,11 +2453,46 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check endpoint for Render deployment
 app.get('/health', (req, res) => {
+    const dbStatus = db ? 'connected' : 'disconnected';
     res.status(200).json({ 
         status: 'healthy', 
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: process.uptime(),
+        database: dbStatus,
+        env: {
+            node_env: process.env.NODE_ENV,
+            db_path: process.env.DB_PATH,
+            port: process.env.PORT
+        }
     });
+});
+
+// Database diagnostic endpoint
+app.get('/api/db-status', (req, res) => {
+    try {
+        if (!db) {
+            return res.status(500).json({ error: 'Database not initialized' });
+        }
+        
+        db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
+            if (err) {
+                return res.status(500).json({ 
+                    error: 'Database query failed', 
+                    details: err.message 
+                });
+            }
+            res.json({ 
+                status: 'ok', 
+                userCount: row.count,
+                dbPath: process.env.DB_PATH || './school.db'
+            });
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            error: 'Database check failed', 
+            details: error.message 
+        });
+    }
 });
 
 // Routes
