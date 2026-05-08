@@ -123,12 +123,12 @@ dist/
 build/
 out/
 
-# Docker
-.dockerignore
+# Docker build files
 
 # Git
 .git/
 !.gitignore
+!.dockerignore
 
 # Monitoring data
 prometheus-data/

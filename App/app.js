@@ -25,7 +25,7 @@ function validateEnv() {
         'JWT_SECRET': 'JWT signing key',
         'SESSION_SECRET': 'Session encryption key',
         'ENCRYPTION_KEY': 'Data encryption key',
-        'DB_URL': 'Database path'
+        'DB_PATH': 'Database path'
     };
 
     const optional = {
