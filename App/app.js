@@ -2189,30 +2189,38 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 // Hardened CORS Configuration
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:10000',
+    'http://127.0.0.1:3000',
+    'https://localhost:3443',
+    'https://127.0.0.1:3443',
+    'https://school-management-dit2.onrender.com'
+];
+
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        
-        const allowedOrigins = process.env.CORS_ORIGINS ? 
-            process.env.CORS_ORIGINS.split(',').map(o => o.trim()) : 
-            ['http://localhost:3000', 'https://localhost:3443', 'http://127.0.0.1:3000', 'https://127.0.0.1:3443'];
-        
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        // Allow requests with no origin (like mobile apps, curl, or Postman)
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            console.log(`🚫 CORS: Blocked origin ${origin}`);
+            console.log('🚫 CORS Blocked:', origin);
             writeLog(LOG_FILE, `CORS_BLOCKED: Origin ${origin} not in allowed list`);
-            callback(new Error('Not allowed by CORS'));
+            // Return null, false instead of throwing error to prevent 500 errors
+            callback(null, false);
         }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
-        'Content-Type', 
-        'Authorization', 
-        'X-Session-Id', 
-        'X-App-Signature', 
-        'X-App-Version', 
+        'Content-Type',
+        'Authorization',
+        'X-Session-Id',
+        'X-App-Signature',
+        'X-App-Version',
         'X-App-Build',
         'X-Requested-With',
         'Accept',
@@ -2220,13 +2228,13 @@ const corsOptions = {
     ],
     exposedHeaders: [
         'X-Session-Warning',
-        'X-Session-Time-Remaining', 
+        'X-Session-Time-Remaining',
         'X-Session-Can-Refresh',
         'X-App-Response-Signature',
         'X-App-Response-Checksum',
         'X-App-Timestamp'
     ],
-    credentials: process.env.CORS_CREDENTIALS === 'true',
+    credentials: true,
     maxAge: parseInt(process.env.CORS_MAX_AGE) || 86400, // 24 hours
     optionsSuccessStatus: 200, // For legacy browser support
     preflightContinue: false
