@@ -247,6 +247,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Node.js](https://nodejs.org/) - JavaScript runtime
 
 ---
+## Screenshots
+
+### Docker Containers
+![Docker](container.png)
+
+### Jenkins CI/CD Pipeline
+![Jenkins](jenkins dashboard.png)
+
+### Grafana Monitoring
+![Grafana](grafana.png)
+
+### School Management Portal
+![School Portal](login.png)
+![School Portal](dashboard.png)
 
 **⭐ Star this repository if it helped you!**
 
