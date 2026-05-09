@@ -24,8 +24,7 @@ function validateEnv() {
     const required = {
         'JWT_SECRET': 'JWT signing key',
         'SESSION_SECRET': 'Session encryption key',
-        'ENCRYPTION_KEY': 'Data encryption key',
-        'DB_PATH': 'Database path'
+        'ENCRYPTION_KEY': 'Data encryption key'
     };
 
     const optional = {
@@ -1649,23 +1648,54 @@ function initializeAdminUser() {
     });
 }
 
-// Initialize SQLite database with better error handling
-// Render persistent disk path: /var/data/database.sqlite (production)
-// Local development fallback: ./data/school.db
-const dbPath = process.env.DB_PATH || (process.env.NODE_ENV === 'production'
-    ? '/var/data/database.sqlite'
-    : './data/school.db');
-console.log('[DB] SQLite persistent storage enabled');
-console.log('[DB] Initializing database at:', dbPath);
+// Initialize SQLite database - Free Tier Compatible Setup
+// Production: Copies data/school.db to runtime/database.sqlite on startup
+// Local: Uses ./school.db
+let dbPath = './school.db';
 
-// Ensure data directory exists
+if (process.env.NODE_ENV === 'production') {
+    const runtimeDir = path.join(__dirname, 'runtime');
+    const runtimeDb = path.join(runtimeDir, 'database.sqlite');
+    const sourceDb = path.join(__dirname, 'data', 'school.db');
+
+    // Create runtime directory if missing
+    if (!fs.existsSync(runtimeDir)) {
+        try {
+            fs.mkdirSync(runtimeDir, { recursive: true });
+            console.log('[DB] Created runtime directory:', runtimeDir);
+        } catch (err) {
+            console.error('[DB] Failed to create runtime directory:', err.message);
+        }
+    }
+
+    // Copy database from repo to runtime if not exists
+    if (!fs.existsSync(runtimeDb) && fs.existsSync(sourceDb)) {
+        try {
+            fs.copyFileSync(sourceDb, runtimeDb);
+            console.log('[DB] ✅ Production database copied from repo:', sourceDb, '→', runtimeDb);
+        } catch (err) {
+            console.error('[DB] ❌ Failed to copy database:', err.message);
+        }
+    } else if (!fs.existsSync(sourceDb)) {
+        console.error('[DB] ❌ Source database not found in repo:', sourceDb);
+    } else {
+        console.log('[DB] Database already exists at:', runtimeDb);
+    }
+
+    dbPath = runtimeDb;
+}
+
+console.log('[DB] SQLite database path:', dbPath);
+console.log('[DB] Environment:', process.env.NODE_ENV || 'development');
+
+// Ensure database directory exists
 const dataDir = path.dirname(dbPath);
 if (!fs.existsSync(dataDir)) {
     try {
         fs.mkdirSync(dataDir, { recursive: true });
-        console.log('Created data directory:', dataDir);
-    } catch (mkdirErr) {
-        console.error('Failed to create data directory:', mkdirErr.message);
+        console.log('[DB] Created directory:', dataDir);
+    } catch (err) {
+        console.error('[DB] Failed to create directory:', err.message);
     }
 }
 
@@ -2514,7 +2544,7 @@ app.get('/health', (req, res) => {
         database: dbStatus,
         env: {
             node_env: process.env.NODE_ENV,
-            db_path: process.env.DB_PATH,
+            db_path: dbPath,
             port: process.env.PORT
         }
     });
@@ -2537,7 +2567,7 @@ app.get('/api/db-status', (req, res) => {
             res.json({ 
                 status: 'ok', 
                 userCount: row.count,
-                dbPath: process.env.DB_PATH || './school.db'
+                dbPath: dbPath
             });
         });
     } catch (error) {
