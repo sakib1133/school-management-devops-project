@@ -2095,6 +2095,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         }
                     });
                 }
+
+                const hasStudentId = columns.some(col => col.name === 'student_id');
+                if (!hasStudentId) {
+                    db.run("ALTER TABLE users ADD COLUMN student_id TEXT", (alterErr) => {
+                        if (alterErr) {
+                            console.error('Error adding student_id to users:', alterErr.message);
+                        } else {
+                            console.log('Added student_id column to users table');
+                        }
+                    });
+                }
             });
 
             db.run(`CREATE TABLE IF NOT EXISTS email_otps (
