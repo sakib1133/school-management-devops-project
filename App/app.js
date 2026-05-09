@@ -1591,14 +1591,72 @@ function logLoginAttempt(username, role, success, reason = '', clientIP = 'unkno
     const timestamp = new Date().toISOString();
     const status = success ? 'SUCCESS' : 'FAILED';
     const logMessage = `LOGIN_${status}: Username: ${username} | Role: ${role} | IP: ${clientIP} | Reason: ${reason}`;
-    
+
     writeLog(LOGIN_LOG_FILE, logMessage);
     console.log(`🔐 Login ${status}: ${username} (${role}) from ${clientIP} ${reason ? '- ' + reason : ''}`);
 }
 
+// Secure admin initialization - database only, no hardcoded passwords
+// This function implements the following behavior:
+// - If admin exists: keep existing credentials (never modify)
+// - If admin doesn't exist and ADMIN_PASSWORD env var exists: create admin with hashed password
+// - If admin doesn't exist and no ADMIN_PASSWORD: skip creation, log warning
+function initializeAdminUser() {
+    const ADMIN_USERNAME = 'admin';
+    const ADMIN_ROLE = 'admin';
+
+    // Check if admin already exists
+    db.get('SELECT id, username FROM users WHERE username = ? AND role = ?', [ADMIN_USERNAME, ADMIN_ROLE], (err, existingAdmin) => {
+        if (err) {
+            console.error('[AUTH] Error checking for existing admin:', err.message);
+            return;
+        }
+
+        if (existingAdmin) {
+            // Admin exists - DO NOT modify password or credentials
+            console.log('[AUTH] Admin already exists - keeping existing credentials');
+            return;
+        }
+
+        // Admin does not exist - check for ADMIN_PASSWORD environment variable
+        const adminPassword = process.env.ADMIN_PASSWORD;
+
+        if (!adminPassword) {
+            // No password provided - skip admin creation, log warning
+            console.log('[AUTH WARNING] ADMIN_PASSWORD missing - admin creation skipped');
+            console.log('[AUTH] Set ADMIN_PASSWORD environment variable to create initial admin');
+            return;
+        }
+
+        // Hash the password from environment variable
+        bcrypt.hash(adminPassword, 10, (hashErr, hashedPassword) => {
+            if (hashErr) {
+                console.error('[AUTH] Error hashing admin password:', hashErr.message);
+                return;
+            }
+
+            // Create admin user with hashed password
+            const stmt = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
+            stmt.run(ADMIN_USERNAME, hashedPassword, ADMIN_ROLE, function(insertErr) {
+                if (insertErr) {
+                    console.error('[AUTH] Error creating admin user:', insertErr.message);
+                } else {
+                    console.log('[AUTH] Admin created from environment variable');
+                }
+                stmt.finalize();
+            });
+        });
+    });
+}
+
 // Initialize SQLite database with better error handling
-const dbPath = process.env.DB_PATH || './school.db';
-console.log('Initializing database at:', dbPath);
+// Render persistent disk path: /var/data/database.sqlite (production)
+// Local development fallback: ./data/school.db
+const dbPath = process.env.DB_PATH || (process.env.NODE_ENV === 'production'
+    ? '/var/data/database.sqlite'
+    : './data/school.db');
+console.log('[DB] SQLite persistent storage enabled');
+console.log('[DB] Initializing database at:', dbPath);
 
 // Ensure data directory exists
 const dataDir = path.dirname(dbPath);
@@ -1648,54 +1706,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         }
                     });
                     
-                    // Insert default admin user ONLY if it doesn't exist
-                    // Does NOT overwrite existing admin - preserves your database password
-                    const adminPassword = process.env.ADMIN_PASSWORD;
-                    if (!adminPassword) {
-                        console.log('ADMIN_PASSWORD not set - will create admin only if none exists');
-                    }
-
-                    // Check if admin already exists
-                    db.get('SELECT id FROM users WHERE username = ? AND role = ?', ['admin', 'admin'], (checkErr, existingAdmin) => {
-                        if (checkErr) {
-                            console.error('Error checking for existing admin:', checkErr.message);
-                            return;
-                        }
-
-                        if (existingAdmin) {
-                            console.log('Admin user already exists - keeping existing password from database');
-                            return;
-                        }
-
-                        // No admin exists - create one (only happens on fresh database)
-                        if (!adminPassword) {
-                            console.warn('No ADMIN_PASSWORD set and no admin exists. Set ADMIN_PASSWORD env variable to create admin.');
-                            return;
-                        }
-
-                        const adminUser = {
-                            username: 'admin',
-                            password: adminPassword,
-                            role: 'admin'
-                        };
-
-                        bcrypt.hash(adminUser.password, 10, (hashErr, hashedPassword) => {
-                            if (hashErr) {
-                                console.error('Error hashing admin password:', hashErr.message);
-                                return;
-                            }
-
-                            const stmt = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
-                            stmt.run(adminUser.username, hashedPassword, adminUser.role, function(insertErr) {
-                                if (insertErr) {
-                                    console.error('Error creating default admin:', insertErr.message);
-                                } else {
-                                    console.log('Default admin user created (username: admin)');
-                                }
-                                stmt.finalize();
-                            });
-                        });
-                    });
+                    // Secure admin initialization - database only, no hardcoded passwords
+                    initializeAdminUser();
                 }
             });
 
@@ -2372,7 +2384,7 @@ const authenticateToken = (req, res, next) => {
         });
     }
     
-    jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
         if (err) {
             writeLog(LOG_FILE, `AUTH_FAILED: Invalid/expired token - ${req.method} ${req.originalUrl} - IP: ${clientIP} - Error: ${err.message}`);
             
@@ -3376,8 +3388,10 @@ app.post('/api/login', async (req, res) => {
     console.log("Login attempt:", { username, role });
     
     db.get(query, [username, role], async (err, user) => {
-        console.log("Login - Received:", { username, role, passwordLength: password?.length });
-        console.log("DB user found:", user ? { id: user.id, username: user.username, role: user.role, hasPassword: !!user.password, passwordPrefix: user.password?.substring(0, 20) } : null);
+        // Security: Never log password information - only log authentication events
+        if (user) {
+            console.log(`[AUTH] Login attempt for user: ${username} (${role}) - user found`);
+        }
         if (err) {
             console.error('Database error during login:', err);
             logLoginAttempt(username, role, false, 'Database error', clientIP);
@@ -3398,10 +3412,8 @@ app.post('/api/login', async (req, res) => {
         
         // Password verification using bcrypt
         try {
-            // PRODUCTION MODE - Compare hashed passwords
-            console.log("Comparing password with hash:", { inputPassword: password, storedHashPrefix: user.password?.substring(0, 30) });
+            // SECURITY: Password verification - never log password or hash details
             const isPasswordValid = await bcrypt.compare(password, user.password);
-            console.log("bcrypt.compare result:", isPasswordValid);
 
             if (!isPasswordValid) {
                 logLoginAttempt(username, role, false, 'Invalid password', clientIP);
@@ -3425,7 +3437,7 @@ app.post('/api/login', async (req, res) => {
                     sessionId: sessionId,
                     iat: Math.floor(Date.now() / 1000)
                 },
-                process.env.JWT_SECRET || 'your-secret-key',
+                process.env.JWT_SECRET,
                 { expiresIn: expiresInSeconds }
             );
             
@@ -3835,7 +3847,7 @@ app.post('/api/refresh-token', authenticateToken, (req, res) => {
             sessionId: sessionId,
             iat: Math.floor(Date.now() / 1000)
         },
-        process.env.JWT_SECRET || 'your-secret-key',
+        process.env.JWT_SECRET,
         { expiresIn: expiresInSeconds }
     );
     
@@ -5455,11 +5467,13 @@ app.patch('/api/notifications/:id', authenticateToken, authorizeRole(['admin']),
 // RAZORPAY PAYMENT SYSTEM
 // ======================
 
-// Initialize Razorpay
-const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_dummy_key',
-    key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_secret'
-});
+// Initialize Razorpay only if credentials are provided
+const razorpay = (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET)
+    ? new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID,
+        key_secret: process.env.RAZORPAY_KEY_SECRET
+    })
+    : null;
 
 // POST /api/payments/create-order - Create Razorpay order (Student only)
 app.post('/api/payments/create-order', authenticateToken, authorizeRole(['student']), async (req, res) => {

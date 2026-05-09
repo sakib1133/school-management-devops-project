@@ -14,9 +14,11 @@ services:
       - key: PORT
         value: 10000
 
+      # Database path on Render persistent disk
       - key: DB_PATH
-        value: /opt/render/project/src/App/data/school.db
+        value: /var/data/database.sqlite
 
+      # Secrets - set these in Render dashboard
       - key: JWT_SECRET
         sync: false
 
@@ -26,9 +28,14 @@ services:
       - key: ENCRYPTION_KEY
         sync: false
 
+      # Admin initial password - ONLY used for first admin creation on fresh DB
+      # After admin is created, change password via admin profile
+      - key: ADMIN_PASSWORD
+        sync: false
+
     disk:
       name: data
-      mountPath: /opt/render/project/src/App/data
+      mountPath: /var/data
       sizeGB: 1
 
     healthCheckPath: /health
