@@ -299,9 +299,9 @@ const ANTI_PHISHING_CONFIG = {
     ALLOWED_DOMAINS: process.env.ALLOWED_DOMAINS ? 
         process.env.ALLOWED_DOMAINS.split(',') : 
         ['localhost', '127.0.0.1', 'localhost:3000', '127.0.0.1:3000', 'localhost:3443', '127.0.0.1:3443', 'school-management-dit2.onrender.com', 'onrender.com'],
-    ALLOWED_ORIGINS: process.env.CORS_ORIGINS ? 
-        process.env.CORS_ORIGINS.split(',') : 
-        ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://localhost:3000', 'https://127.0.0.1:3000', 'https://localhost:3443', 'https://127.0.0.1:3443'],
+    ALLOWED_ORIGINS: process.env.CORS_ORIGINS ?
+        process.env.CORS_ORIGINS.split(',') :
+        ['http://localhost:3000', 'http://localhost:10000', 'http://127.0.0.1:3000', 'https://localhost:3000', 'https://127.0.0.1:3000', 'https://localhost:3443', 'https://127.0.0.1:3443', 'https://school-management-dit2.onrender.com'],
     CHECK_REFERER: true,
     CHECK_ORIGIN: true,
     CHECK_HOST: true,
