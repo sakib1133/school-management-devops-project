@@ -1648,30 +1648,52 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         }
                     });
                     
-                    // Insert default admin user if not exists
-                    const adminUser = {
-                        username: 'admin',
-                        password: '1234', // In a real app, this should be hashed
-                        role: 'admin'
-                    };
-                    
-                    // Hash the password before storing
-                    bcrypt.hash(adminUser.password, 10, (err, hashedPassword) => {
-                        if (err) {
-                            console.error('Error hashing admin password:', err.message);
+                    // Insert default admin user ONLY if it doesn't exist
+                    // Does NOT overwrite existing admin - preserves your database password
+                    const adminPassword = process.env.ADMIN_PASSWORD;
+                    if (!adminPassword) {
+                        console.log('ADMIN_PASSWORD not set - will create admin only if none exists');
+                    }
+
+                    // Check if admin already exists
+                    db.get('SELECT id FROM users WHERE username = ? AND role = ?', ['admin', 'admin'], (checkErr, existingAdmin) => {
+                        if (checkErr) {
+                            console.error('Error checking for existing admin:', checkErr.message);
                             return;
                         }
-                        
-                        const stmt = db.prepare('INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)');
-                        stmt.run(adminUser.username, hashedPassword, adminUser.role, function(err) {
-                            if (err) {
-                                console.error('Error creating default admin:', err.message);
-                            } else if (this.changes > 0) {
-                                console.log('Default admin user created with hashed password');
-                            } else {
-                                console.log('Default admin user already exists');
+
+                        if (existingAdmin) {
+                            console.log('Admin user already exists - keeping existing password from database');
+                            return;
+                        }
+
+                        // No admin exists - create one (only happens on fresh database)
+                        if (!adminPassword) {
+                            console.warn('No ADMIN_PASSWORD set and no admin exists. Set ADMIN_PASSWORD env variable to create admin.');
+                            return;
+                        }
+
+                        const adminUser = {
+                            username: 'admin',
+                            password: adminPassword,
+                            role: 'admin'
+                        };
+
+                        bcrypt.hash(adminUser.password, 10, (hashErr, hashedPassword) => {
+                            if (hashErr) {
+                                console.error('Error hashing admin password:', hashErr.message);
+                                return;
                             }
-                            stmt.finalize();
+
+                            const stmt = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
+                            stmt.run(adminUser.username, hashedPassword, adminUser.role, function(insertErr) {
+                                if (insertErr) {
+                                    console.error('Error creating default admin:', insertErr.message);
+                                } else {
+                                    console.log('Default admin user created (username: admin)');
+                                }
+                                stmt.finalize();
+                            });
                         });
                     });
                 }
@@ -3354,7 +3376,8 @@ app.post('/api/login', async (req, res) => {
     console.log("Login attempt:", { username, role });
     
     db.get(query, [username, role], async (err, user) => {
-        console.log("DB user:", user ? { id: user.id, username: user.username, role: user.role } : null);
+        console.log("Login - Received:", { username, role, passwordLength: password?.length });
+        console.log("DB user found:", user ? { id: user.id, username: user.username, role: user.role, hasPassword: !!user.password, passwordPrefix: user.password?.substring(0, 20) } : null);
         if (err) {
             console.error('Database error during login:', err);
             logLoginAttempt(username, role, false, 'Database error', clientIP);
@@ -3376,8 +3399,10 @@ app.post('/api/login', async (req, res) => {
         // Password verification using bcrypt
         try {
             // PRODUCTION MODE - Compare hashed passwords
+            console.log("Comparing password with hash:", { inputPassword: password, storedHashPrefix: user.password?.substring(0, 30) });
             const isPasswordValid = await bcrypt.compare(password, user.password);
-            
+            console.log("bcrypt.compare result:", isPasswordValid);
+
             if (!isPasswordValid) {
                 logLoginAttempt(username, role, false, 'Invalid password', clientIP);
                 trackFailedLogin(clientIP, username, 'Invalid password', req.get('User-Agent'));
